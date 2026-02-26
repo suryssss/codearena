@@ -54,6 +54,11 @@ def create_app(config_name: str = None) -> Flask:
     def make_shell_context():
         return {"db": db, "app": app}
 
+    # ── Start background judge consumer (dev mode) ────────────────
+    if app.debug and os.environ.get("WERKZEUG_RUN_MAIN") == "true":
+        from app.worker_thread import start_background_judge
+        start_background_judge(app)
+
     return app
 
 
@@ -64,12 +69,14 @@ def _register_blueprints(app: Flask) -> None:
     from app.routes.problems import problems_bp
     from app.routes.submissions import submissions_bp
     from app.routes.leaderboard import leaderboard_bp
+    from app.routes.health import health_bp
 
     app.register_blueprint(auth_bp, url_prefix="/api/auth")
     app.register_blueprint(contests_bp, url_prefix="/api/contests")
     app.register_blueprint(problems_bp, url_prefix="/api/problems")
     app.register_blueprint(submissions_bp, url_prefix="/api/submissions")
     app.register_blueprint(leaderboard_bp, url_prefix="/api/leaderboard")
+    app.register_blueprint(health_bp, url_prefix="/api")
 
 
 def _register_error_handlers(app: Flask) -> None:

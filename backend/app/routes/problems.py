@@ -65,9 +65,14 @@ def delete_problem(problem_id):
 def list_problems(contest_id):
     """List all problems for a contest."""
     problems = ProblemService.list_problems_for_contest(contest_id)
-    return jsonify({
-        "problems": [p.to_dict() for p in problems],
-    }), 200
+
+    # Service may return ORM objects or cached dicts
+    if problems and isinstance(problems[0], dict):
+        problem_list = problems
+    else:
+        problem_list = [p.to_dict() for p in problems]
+
+    return jsonify({"problems": problem_list}), 200
 
 
 @problems_bp.route("/<int:problem_id>/test-cases", methods=["POST"])

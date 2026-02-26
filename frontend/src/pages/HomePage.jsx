@@ -5,94 +5,69 @@ export default function HomePage() {
     const { isAuthenticated } = useAuth();
 
     return (
-        <div className="relative overflow-hidden">
-            {/* Background effects */}
-            <div className="pointer-events-none absolute inset-0">
-                <div className="absolute left-1/4 top-20 h-96 w-96 rounded-full bg-arena-primary/5 blur-3xl" />
-                <div className="absolute right-1/4 top-40 h-96 w-96 rounded-full bg-arena-accent/5 blur-3xl" />
+        <div className="relative min-h-[calc(100vh-64px)] flex flex-col items-center justify-center overflow-hidden">
+            {/* Minimalist ambient background glow */}
+            <div className="pointer-events-none absolute inset-0 overflow-hidden">
+                <div className="absolute left-1/2 top-0 h-[500px] w-[800px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-arena-primary/10 opacity-50 blur-[120px]" />
             </div>
 
-            {/* Hero */}
-            <div className="relative mx-auto max-w-5xl px-4 py-24 sm:px-6 text-center">
-                <div className="animate-fade-in">
-                    <div className="mb-6 inline-flex items-center gap-2 rounded-full bg-arena-primary/10 border border-arena-primary/20 px-4 py-1.5 text-sm text-arena-primary-light">
-                        <span className="h-2 w-2 animate-pulse rounded-full bg-arena-accent" />
-                        Live coding contests
+            {/* Hero Section */}
+            <div className="relative z-10 mx-auto max-w-4xl px-6 py-20 text-center flex flex-col items-center">
+                <div className="animate-fade-in flex flex-col items-center">
+                    <div className="mb-8 inline-flex items-center gap-2 rounded-full bg-arena-surface border border-arena-border px-4 py-1.5 text-xs font-medium text-arena-text-muted transition-colors hover:border-arena-primary/50 cursor-default">
+                        <span className="h-2 w-2 rounded-full bg-arena-primary animate-slowPulse" />
+                        CodeArena Environment Online
                     </div>
 
-                    <h1 className="mb-6 text-5xl font-extrabold leading-tight sm:text-6xl">
-                        Code. Compete.
+                    <h1 className="mb-6 text-5xl font-bold tracking-tight text-arena-text sm:text-7xl">
+                        Uninterrupted Focus.
                         <br />
-                        <span className="bg-gradient-to-r from-arena-primary-light via-arena-accent to-arena-accent-light bg-clip-text text-transparent">
-                            Conquer.
-                        </span>
+                        <span className="text-arena-text-muted">Uncompromising Speed.</span>
                     </h1>
 
-                    <p className="mx-auto mb-10 max-w-2xl text-lg text-arena-text-muted leading-relaxed">
-                        Real-time coding contests with auto-judging, live leaderboards, and instant feedback.
-                        Submit your solutions, compete with peers, and sharpen your skills.
+                    <p className="mx-auto mb-12 max-w-2xl text-lg text-arena-text-muted leading-relaxed">
+                        A premium competitive coding environment engineered for optimal performance.
+                        Sub-second auto-judging, live leaderboards, and a zero-distraction editor.
                     </p>
 
-                    <div className="flex flex-wrap items-center justify-center gap-4">
+                    <div className="flex flex-col sm:flex-row items-center justify-center gap-4 w-full sm:w-auto">
                         <Link
                             to={isAuthenticated ? '/contests' : '/register'}
-                            className="rounded-xl bg-arena-primary px-8 py-3.5 text-base font-semibold text-white transition-all hover:bg-arena-primary/80 hover:shadow-xl hover:shadow-arena-primary/20 hover:-translate-y-0.5 no-underline"
+                            className="btn-primary px-8 py-3 text-sm flex w-full sm:w-auto justify-center no-underline"
                         >
-                            {isAuthenticated ? 'Browse Contests' : 'Get Started — Free'}
+                            {isAuthenticated ? 'Browse Contests' : 'Start Coding'}
                         </Link>
                         <Link
                             to="/contests"
-                            className="rounded-xl border border-arena-border bg-arena-surface px-8 py-3.5 text-base font-semibold text-arena-text transition-all hover:border-arena-border-light hover:bg-arena-surface-2 no-underline"
+                            className="rounded-md border border-arena-border bg-arena-surface px-8 py-3 text-sm font-medium text-arena-text transition-colors hover:bg-arena-surface-hover w-full sm:w-auto flex justify-center no-underline"
                         >
-                            View Contests
+                            View Leaderboards
                         </Link>
                     </div>
                 </div>
 
-                {/* Features */}
-                <div className="mt-24 grid gap-6 sm:grid-cols-3 animate-fade-in-delay">
+                {/* Strict Minimal Features Grid */}
+                <div className="mt-32 w-full grid gap-4 sm:grid-cols-3 animate-fade-in-delay text-left">
                     {[
                         {
-                            icon: '⚡',
-                            title: 'Auto-Judge',
-                            desc: 'Submit code and get results in seconds with our sandboxed execution engine.',
+                            title: 'Zero Latency Judging',
+                            desc: 'Redis-backed queue execution pipeline delivering results in milliseconds.',
                         },
                         {
-                            icon: '🏆',
-                            title: 'Live Leaderboard',
-                            desc: 'Real-time rankings updated after every submission. See where you stand.',
+                            title: 'Data-Driven Rankings',
+                            desc: 'Live analytical leaderboards updating instantly without layout shifts.',
                         },
                         {
-                            icon: '🔒',
-                            title: 'Secure Sandbox',
-                            desc: 'Code executes in isolated Docker containers with strict resource limits.',
+                            title: 'Immersive Environment',
+                            desc: 'Dark-mode-first Monaco editor designed to eliminate ocular fatigue.',
                         },
                     ].map((feature, idx) => (
                         <div
                             key={idx}
-                            className="group rounded-xl border border-arena-border bg-arena-surface p-6 text-left transition-all hover:border-arena-primary/30 hover:bg-arena-surface-2"
+                            className="panel-card p-6 border-arena-border hover:border-arena-border/80 bg-transparent hover:bg-arena-surface transition-colors"
                         >
-                            <span className="mb-4 inline-flex h-12 w-12 items-center justify-center rounded-lg bg-arena-surface-2 text-2xl transition-transform group-hover:scale-110">
-                                {feature.icon}
-                            </span>
-                            <h3 className="mb-2 text-lg font-semibold">{feature.title}</h3>
-                            <p className="text-sm text-arena-text-muted">{feature.desc}</p>
-                        </div>
-                    ))}
-                </div>
-
-                {/* Stats */}
-                <div className="mt-20 flex flex-wrap justify-center gap-12 animate-fade-in-delay">
-                    {[
-                        { value: 'Python', label: 'Language Support' },
-                        { value: '< 5s', label: 'Avg Judge Time' },
-                        { value: '100%', label: 'Sandboxed' },
-                    ].map((stat, idx) => (
-                        <div key={idx} className="text-center">
-                            <p className="text-3xl font-bold bg-gradient-to-r from-arena-primary-light to-arena-accent bg-clip-text text-transparent">
-                                {stat.value}
-                            </p>
-                            <p className="mt-1 text-sm text-arena-text-muted">{stat.label}</p>
+                            <h3 className="mb-2 text-sm font-semibold text-arena-text tracking-wide">{feature.title}</h3>
+                            <p className="text-sm text-arena-text-muted leading-relaxed">{feature.desc}</p>
                         </div>
                     ))}
                 </div>

@@ -37,9 +37,14 @@ def list_contests():
         pass
 
     contests = ContestService.list_contests(published_only=not is_admin)
-    return jsonify({
-        "contests": [c.to_dict() for c in contests],
-    }), 200
+
+    # Service may return ORM objects or cached dicts
+    if contests and isinstance(contests[0], dict):
+        contest_list = contests
+    else:
+        contest_list = [c.to_dict() for c in contests]
+
+    return jsonify({"contests": contest_list}), 200
 
 
 @contests_bp.route("/<int:contest_id>", methods=["GET"])

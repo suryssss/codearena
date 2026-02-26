@@ -1,35 +1,56 @@
 @import "tailwindcss";
 
-/* ── Custom Design System ──────────────────────────────────────── */
+/* ── Custom Design System (Premium Minimal UI) ──────────────── */
 
 @theme {
-  --color-arena-bg: #0a0a0f;
-  --color-arena-surface: #12121a;
-  --color-arena-surface-2: #1a1a28;
-  --color-arena-border: #2a2a3d;
-  --color-arena-border-light: #3a3a52;
-  --color-arena-text: #e4e4ef;
-  --color-arena-text-muted: #8888a4;
-  --color-arena-primary: #6c5ce7;
-  --color-arena-primary-light: #a29bfe;
-  --color-arena-accent: #00cec9;
-  --color-arena-accent-light: #55efc4;
-  --color-arena-danger: #ff6b6b;
-  --color-arena-warning: #fdcb6e;
-  --color-arena-success: #00b894;
-  --color-arena-info: #74b9ff;
+  /* Core Foundation Colors */
+  --color-arena-bg: #09090b;
+  /* bg-base: Deep Zinc */
+  --color-arena-surface: #18181b;
+  /* bg-surface: Elevated */
+  --color-arena-surface-hover: #27272a;
+  /* Interactive surface */
+  --color-arena-border: #27272a;
+  /* 1px subtle borders */
+
+  /* Text */
+  --color-arena-text: #fafafa;
+  /* text-primary */
+  --color-arena-text-muted: #a1a1aa;
+  /* text-secondary */
+
+  /* Brand/Accent */
+  --color-arena-primary: #14b8a6;
+  /* Muted Teal for focus */
+  --color-arena-primary-hover: #0d9488;
+
+  /* Semantics */
+  --color-arena-danger: #ef4444;
+  /* Error/Wrong Answer */
+  --color-arena-warning: #eab308;
+  /* Warning/Time Limit */
+  --color-arena-success: #22c55e;
+  /* Success/Accepted */
+  --color-arena-info: #3b82f6;
+  /* Info */
+
+  /* Spacing */
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
 }
 
 /* ── Base Styles ───────────────────────────────────────────────── */
 
 * {
   box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
 }
 
 body {
   margin: 0;
   padding: 0;
-  font-family: 'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif;
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
   background-color: var(--color-arena-bg);
   color: var(--color-arena-text);
   line-height: 1.6;
@@ -37,63 +58,111 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* ── Scrollbar ─────────────────────────────────────────────────── */
+/* ── Scrollbar (Minimal) ───────────────────────────────────────── */
 
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
 }
+
 ::-webkit-scrollbar-track {
-  background: var(--color-arena-bg);
+  background: transparent;
 }
+
 ::-webkit-scrollbar-thumb {
-  background: var(--color-arena-border);
+  background: var(--color-arena-surface-hover);
   border-radius: 3px;
 }
+
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--color-arena-border-light);
+  background: #3f3f46;
 }
 
-/* ── Animations ────────────────────────────────────────────────── */
+/* ── Animations (Fast, purposeful, no bounce) ──────────────────── */
 
-@keyframes fadeIn {
-  from { opacity: 0; transform: translateY(8px); }
-  to { opacity: 1; transform: translateY(0); }
+@keyframes fadeInMove {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
-@keyframes pulse-glow {
-  0%, 100% { box-shadow: 0 0 8px rgba(108, 92, 231, 0.3); }
-  50% { box-shadow: 0 0 20px rgba(108, 92, 231, 0.6); }
+@keyframes slowPulse {
+
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0.6;
+  }
 }
 
-@keyframes shimmer {
-  0% { background-position: -200% 0; }
-  100% { background-position: 200% 0; }
+@keyframes waveShimmer {
+  0% {
+    background-position: -200% 0;
+  }
+
+  100% {
+    background-position: 200% 0;
+  }
 }
 
+/* Utility classes for animations */
 .animate-fade-in {
-  animation: fadeIn 0.4s ease-out both;
+  animation: fadeInMove 0.2s cubic-bezier(0.4, 0, 0.2, 1) both;
 }
 
 .animate-fade-in-delay {
-  animation: fadeIn 0.4s ease-out 0.1s both;
+  animation: fadeInMove 0.2s cubic-bezier(0.4, 0, 0.2, 1) 0.1s both;
 }
 
-.animate-pulse-glow {
-  animation: pulse-glow 2s ease-in-out infinite;
+.animate-fade-in-delay-2 {
+  animation: fadeInMove 0.2s cubic-bezier(0.4, 0, 0.2, 1) 0.2s both;
 }
 
-/* ── Skeleton Loader ───────────────────────────────────────────── */
+/* ── Skeleton Loader (Subtle) ──────────────────────────────────── */
 
 .skeleton {
-  background: linear-gradient(90deg, var(--color-arena-surface-2) 25%, var(--color-arena-border) 50%, var(--color-arena-surface-2) 75%);
+  background: linear-gradient(90deg,
+      var(--color-arena-surface) 25%,
+      var(--color-arena-surface-hover) 50%,
+      var(--color-arena-surface) 75%);
   background-size: 200% 100%;
-  animation: shimmer 1.5s ease-in-out infinite;
-  border-radius: 6px;
+  animation: waveShimmer 1.5s infinite linear;
+  border-radius: var(--radius-sm);
+}
+
+/* ── Component Primitives ──────────────────────────────────────── */
+
+.btn-primary {
+  @apply bg-arena-primary text-white rounded-md font-medium transition-all duration-150;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+.btn-primary:hover {
+  @apply bg-arena-primary-hover;
+}
+
+.panel-card {
+  @apply bg-arena-surface border border-arena-border rounded-lg shadow-sm;
 }
 
 /* ── Monaco Editor Override ────────────────────────────────────── */
 
+.monaco-editor,
+.monaco-editor-background,
+.monaco-editor .inputarea.ime-input {
+  background-color: transparent !important;
+}
+
 .monaco-editor .overflow-guard {
-  border-radius: 8px;
+  border-radius: 0;
+  /* Remove border radius inside editor split pane to feel native */
 }

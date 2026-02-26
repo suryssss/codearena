@@ -1,4 +1,4 @@
-"""Leaderboard service — Redis-backed real-time rankings."""
+"""Leaderboard service — Redis-backed real-time rankings with caching."""
 
 from app.extensions import db
 from app.models.participant import ContestParticipant
@@ -6,6 +6,10 @@ from app.models.user import User
 from app.models.contest import Contest
 from app.models.submission import Submission
 from app.errors import NotFoundError
+from app.utils.cache import (
+    cache_get, cache_set, cache_invalidate_leaderboard,
+    TTL_SHORT,
+)
 import app.extensions as ext
 
 
@@ -19,7 +23,7 @@ class LeaderboardService:
 
     @staticmethod
     def update_score(contest_id: int, user_id: int, score: int) -> None:
-        """Update a user's score in the Redis sorted set."""
+        """Update a user's score in the Redis sorted set and invalidate cache."""
         redis_client = ext.redis_client
         if redis_client:
             try:
@@ -37,6 +41,9 @@ class LeaderboardService:
         if participant:
             participant.score = score
             db.session.commit()
+
+        # Invalidate cached leaderboard JSON
+        cache_invalidate_leaderboard(contest_id)
 
     @staticmethod
     def recalculate_user_score(contest_id: int, user_id: int) -> int:
@@ -70,7 +77,7 @@ class LeaderboardService:
             participant.problems_solved = problems_solved
             db.session.commit()
 
-        # Update Redis
+        # Update Redis sorted set + invalidate cached JSON
         LeaderboardService.update_score(contest_id, user_id, total_score)
 
         return total_score
@@ -79,20 +86,28 @@ class LeaderboardService:
     def get_leaderboard(contest_id: int) -> list[dict]:
         """
         Get the leaderboard for a contest.
-        Tries Redis first for speed, falls back to DB.
+        Uses a 2-layer cache:
+        1. Short TTL JSON cache for the full leaderboard response
+        2. Redis sorted set for real-time rankings
+        Falls back to DB if Redis is unavailable.
         """
         contest = Contest.query.get(contest_id)
         if not contest:
             raise NotFoundError("Contest not found")
 
+        # Layer 1: Check JSON cache first (fastest)
+        cache_key = f"cache:leaderboard:{contest_id}"
+        cached = cache_get(cache_key)
+        if cached is not None:
+            return cached
+
         redis_client = ext.redis_client
         leaderboard = []
 
-        # Try Redis first
+        # Layer 2: Try Redis sorted set
         if redis_client:
             try:
                 key = LeaderboardService._key(contest_id)
-                # ZREVRANGEBYSCORE returns highest scores first
                 rankings = redis_client.zrevrange(key, 0, -1, withscores=True)
                 if rankings:
                     rank = 1
@@ -110,11 +125,14 @@ class LeaderboardService:
                                 "problems_solved": participant.problems_solved if participant else 0,
                             })
                             rank += 1
+
+                    # Cache the result for quick subsequent reads
+                    cache_set(cache_key, leaderboard, TTL_SHORT)
                     return leaderboard
             except Exception:
                 pass
 
-        # Fallback to DB
+        # Layer 3: Fallback to DB
         participants = (
             ContestParticipant.query
             .filter_by(contest_id=contest_id)
@@ -132,5 +150,8 @@ class LeaderboardService:
                     "score": participant.score,
                     "problems_solved": participant.problems_solved,
                 })
+
+        # Cache DB result too
+        cache_set(cache_key, leaderboard, TTL_SHORT)
 
         return leaderboard
