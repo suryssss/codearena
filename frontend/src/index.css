@@ -1,0 +1,99 @@
+@import "tailwindcss";
+
+/* ── Custom Design System ──────────────────────────────────────── */
+
+@theme {
+  --color-arena-bg: #0a0a0f;
+  --color-arena-surface: #12121a;
+  --color-arena-surface-2: #1a1a28;
+  --color-arena-border: #2a2a3d;
+  --color-arena-border-light: #3a3a52;
+  --color-arena-text: #e4e4ef;
+  --color-arena-text-muted: #8888a4;
+  --color-arena-primary: #6c5ce7;
+  --color-arena-primary-light: #a29bfe;
+  --color-arena-accent: #00cec9;
+  --color-arena-accent-light: #55efc4;
+  --color-arena-danger: #ff6b6b;
+  --color-arena-warning: #fdcb6e;
+  --color-arena-success: #00b894;
+  --color-arena-info: #74b9ff;
+}
+
+/* ── Base Styles ───────────────────────────────────────────────── */
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  font-family: 'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif;
+  background-color: var(--color-arena-bg);
+  color: var(--color-arena-text);
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ── Scrollbar ─────────────────────────────────────────────────── */
+
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: var(--color-arena-bg);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-arena-border);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-arena-border-light);
+}
+
+/* ── Animations ────────────────────────────────────────────────── */
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes pulse-glow {
+  0%, 100% { box-shadow: 0 0 8px rgba(108, 92, 231, 0.3); }
+  50% { box-shadow: 0 0 20px rgba(108, 92, 231, 0.6); }
+}
+
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.4s ease-out both;
+}
+
+.animate-fade-in-delay {
+  animation: fadeIn 0.4s ease-out 0.1s both;
+}
+
+.animate-pulse-glow {
+  animation: pulse-glow 2s ease-in-out infinite;
+}
+
+/* ── Skeleton Loader ───────────────────────────────────────────── */
+
+.skeleton {
+  background: linear-gradient(90deg, var(--color-arena-surface-2) 25%, var(--color-arena-border) 50%, var(--color-arena-surface-2) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s ease-in-out infinite;
+  border-radius: 6px;
+}
+
+/* ── Monaco Editor Override ────────────────────────────────────── */
+
+.monaco-editor .overflow-guard {
+  border-radius: 8px;
+}
