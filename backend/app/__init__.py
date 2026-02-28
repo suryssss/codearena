@@ -5,7 +5,7 @@ Application factory for CodeArena backend.
 import os
 from flask import Flask
 from app.config import config_by_name
-from app.extensions import db, migrate, jwt, cors, redis as redis_module
+from app.extensions import db, migrate, jwt, cors, socketio, redis as redis_module
 import app.extensions as ext
 import redis
 
@@ -30,6 +30,15 @@ def create_app(config_name: str = None) -> Flask:
     jwt.init_app(app)
     cors.init_app(app, resources={r"/api/*": {"origins": "*"}})
 
+    # ── SocketIO ─────────────────────────────────────────────────────
+    socketio.init_app(
+        app,
+        cors_allowed_origins="*",
+        async_mode="eventlet",
+        logger=False,
+        engineio_logger=False,
+    )
+
     # ── Redis client (optional — app works without it) ─────────────
     try:
         redis_conn = redis.from_url(
@@ -45,6 +54,9 @@ def create_app(config_name: str = None) -> Flask:
 
     # ── Register blueprints ──────────────────────────────────────────
     _register_blueprints(app)
+
+    # ── Register SocketIO event handlers ─────────────────────────────
+    _register_socket_events(app)
 
     # ── Register error handlers ──────────────────────────────────────
     _register_error_handlers(app)
@@ -70,6 +82,7 @@ def _register_blueprints(app: Flask) -> None:
     from app.routes.submissions import submissions_bp
     from app.routes.leaderboard import leaderboard_bp
     from app.routes.health import health_bp
+    from app.routes.proctoring import proctoring_bp
 
     app.register_blueprint(auth_bp, url_prefix="/api/auth")
     app.register_blueprint(contests_bp, url_prefix="/api/contests")
@@ -77,6 +90,12 @@ def _register_blueprints(app: Flask) -> None:
     app.register_blueprint(submissions_bp, url_prefix="/api/submissions")
     app.register_blueprint(leaderboard_bp, url_prefix="/api/leaderboard")
     app.register_blueprint(health_bp, url_prefix="/api")
+    app.register_blueprint(proctoring_bp, url_prefix="/api/proctoring")
+
+
+def _register_socket_events(app: Flask) -> None:
+    """Import and register SocketIO event handlers."""
+    from app.sockets import events  # noqa: F401
 
 
 def _register_error_handlers(app: Flask) -> None:

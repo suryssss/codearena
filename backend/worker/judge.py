@@ -31,6 +31,7 @@ def judge_submission(submission_id: int, executor: CodeExecutor) -> None:
     3. Execute code against each test case
     4. Compare output
     5. Update status and score
+    6. Emit real-time events via SocketIO
     """
     submission = Submission.query.get(submission_id)
     if not submission:
@@ -40,6 +41,9 @@ def judge_submission(submission_id: int, executor: CodeExecutor) -> None:
     # Mark as running
     submission.status = Submission.STATUS_RUNNING
     db.session.commit()
+
+    # Emit running status via SocketIO
+    _emit_submission_status(submission)
 
     # Get test cases
     test_cases = TestCase.query.filter_by(
@@ -51,6 +55,7 @@ def judge_submission(submission_id: int, executor: CodeExecutor) -> None:
         submission.test_cases_passed = 0
         submission.total_test_cases = 0
         db.session.commit()
+        _emit_submission_status(submission)
         print(f"[Judge] Submission {submission_id}: No test cases, marking accepted")
         return
 
@@ -77,13 +82,15 @@ def judge_submission(submission_id: int, executor: CodeExecutor) -> None:
         # Check for TLE
         if result["timed_out"]:
             final_status = Submission.STATUS_TIME_LIMIT
+            # No detailed error message in SUBMIT mode
             submission.error_message = "Time limit exceeded"
             break
 
         # Check for runtime error
         if result["exit_code"] != 0:
             final_status = Submission.STATUS_RUNTIME_ERROR
-            submission.error_message = result["stderr"][:1000] if result["stderr"] else "Runtime error"
+            # No detailed stack trace in SUBMIT mode
+            submission.error_message = "Runtime error"
             break
 
         # Compare output (strip trailing whitespace/newlines)
@@ -105,12 +112,37 @@ def judge_submission(submission_id: int, executor: CodeExecutor) -> None:
 
     print(f"[Judge] Submission {submission_id}: {final_status} ({passed}/{len(test_cases)} passed, {max_time:.3f}s)")
 
+    # Emit final result via SocketIO
+    _emit_submission_status(submission)
+
     # Update leaderboard if accepted
     if final_status == Submission.STATUS_ACCEPTED:
         LeaderboardService.recalculate_user_score(
             contest_id=submission.contest_id,
             user_id=submission.user_id,
         )
+
+
+def _emit_submission_status(submission: Submission) -> None:
+    """Emit submission status update via SocketIO."""
+    try:
+        from app.sockets.events import emit_submission_result
+        emit_submission_result(
+            contest_id=submission.contest_id,
+            submission_data={
+                "id": submission.id,
+                "user_id": submission.user_id,
+                "problem_id": submission.problem_id,
+                "contest_id": submission.contest_id,
+                "status": submission.status,
+                "test_cases_passed": submission.test_cases_passed,
+                "total_test_cases": submission.total_test_cases,
+                "execution_time": submission.execution_time,
+                # No error_message or code in SUBMIT mode events
+            },
+        )
+    except Exception as e:
+        print(f"[Judge] SocketIO emit error (non-fatal): {e}")
 
 
 def run_worker():

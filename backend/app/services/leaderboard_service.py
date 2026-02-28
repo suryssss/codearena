@@ -1,4 +1,6 @@
-"""Leaderboard service — Redis-backed real-time rankings with caching."""
+"""Leaderboard service — Redis-backed real-time rankings with penalty scoring and SocketIO."""
+
+from datetime import datetime, timezone
 
 from app.extensions import db
 from app.models.participant import ContestParticipant
@@ -15,11 +17,19 @@ import app.extensions as ext
 
 class LeaderboardService:
 
-    LEADERBOARD_KEY_PREFIX = "leaderboard:"
+    LEADERBOARD_KEY_PREFIX = "contest:"
 
     @staticmethod
     def _key(contest_id: int) -> str:
-        return f"{LeaderboardService.LEADERBOARD_KEY_PREFIX}{contest_id}"
+        return f"{LeaderboardService.LEADERBOARD_KEY_PREFIX}{contest_id}:leaderboard"
+
+    @staticmethod
+    def _calculate_score(solved_count: int, penalty_time: int) -> int:
+        """
+        Score formula: score = solved_count * 1000 - total_penalty_time
+        Higher is better.
+        """
+        return solved_count * 1000 - penalty_time
 
     @staticmethod
     def update_score(contest_id: int, user_id: int, score: int) -> None:
@@ -49,24 +59,59 @@ class LeaderboardService:
     def recalculate_user_score(contest_id: int, user_id: int) -> int:
         """
         Recalculate a user's total score for a contest based on accepted submissions.
-        Only counts the best submission per problem.
+        Uses formula: score = solved_count * 1000 - penalty_time
+        Only counts the first accepted submission per problem.
         """
         from app.models.problem import Problem
 
+        contest = Contest.query.get(contest_id)
         problems = Problem.query.filter_by(contest_id=contest_id).all()
         total_score = 0
         problems_solved = 0
+        total_penalty = 0
 
         for problem in problems:
+            # Get first accepted submission for this problem
             accepted = Submission.query.filter_by(
                 user_id=user_id,
                 problem_id=problem.id,
                 contest_id=contest_id,
                 status=Submission.STATUS_ACCEPTED,
-            ).first()
+            ).order_by(Submission.created_at.asc()).first()
+
             if accepted:
-                total_score += problem.points
                 problems_solved += 1
+
+                # Calculate penalty: time from contest start to accepted submission
+                if contest and contest.start_time and accepted.created_at:
+                    start = contest.start_time
+                    submit_time = accepted.created_at
+                    # Ensure both are timezone-aware or both naive
+                    if start.tzinfo and not submit_time.tzinfo:
+                        submit_time = submit_time.replace(tzinfo=timezone.utc)
+                    elif not start.tzinfo and submit_time.tzinfo:
+                        start = start.replace(tzinfo=timezone.utc)
+
+                    penalty_seconds = max(0, int((submit_time - start).total_seconds()))
+
+                    # Count wrong attempts before first AC (each adds 20 min penalty)
+                    wrong_attempts = Submission.query.filter(
+                        Submission.user_id == user_id,
+                        Submission.problem_id == problem.id,
+                        Submission.contest_id == contest_id,
+                        Submission.status != Submission.STATUS_ACCEPTED,
+                        Submission.status != Submission.STATUS_PENDING,
+                        Submission.status != Submission.STATUS_RUNNING,
+                        Submission.created_at < accepted.created_at,
+                    ).count()
+
+                    total_penalty += penalty_seconds + (wrong_attempts * 20 * 60)  # 20 min each
+
+        # Calculate final score
+        total_score = LeaderboardService._calculate_score(problems_solved, total_penalty)
+
+        # Get old rank before updating
+        old_rank = LeaderboardService._get_user_rank(contest_id, user_id)
 
         # Update participant record
         participant = ContestParticipant.query.filter_by(
@@ -75,12 +120,87 @@ class LeaderboardService:
         if participant:
             participant.score = total_score
             participant.problems_solved = problems_solved
+            participant.penalty_time = total_penalty
             db.session.commit()
 
         # Update Redis sorted set + invalidate cached JSON
         LeaderboardService.update_score(contest_id, user_id, total_score)
 
+        # Get new rank and emit events
+        new_rank = LeaderboardService._get_user_rank(contest_id, user_id)
+        LeaderboardService._emit_updates(contest_id, user_id, old_rank, new_rank)
+
         return total_score
+
+    @staticmethod
+    def _get_user_rank(contest_id: int, user_id: int) -> int:
+        """Get user's current rank from Redis or DB."""
+        redis_client = ext.redis_client
+        if redis_client:
+            try:
+                rank = redis_client.zrevrank(
+                    LeaderboardService._key(contest_id),
+                    str(user_id),
+                )
+                if rank is not None:
+                    return rank + 1  # 0-indexed -> 1-indexed
+            except Exception:
+                pass
+
+        # Fallback: DB-based rank
+        participants = (
+            ContestParticipant.query
+            .filter_by(contest_id=contest_id)
+            .order_by(ContestParticipant.score.desc(), ContestParticipant.penalty_time.asc())
+            .all()
+        )
+        for i, p in enumerate(participants, 1):
+            if p.user_id == user_id:
+                return i
+        return 0
+
+    @staticmethod
+    def _emit_updates(contest_id: int, user_id: int, old_rank: int, new_rank: int):
+        """Emit real-time SocketIO events for leaderboard and rank changes."""
+        try:
+            from app.sockets.events import emit_leaderboard_update, emit_rank_change
+
+            # Emit updated leaderboard
+            leaderboard = LeaderboardService.get_leaderboard(contest_id)
+            emit_leaderboard_update(contest_id, leaderboard)
+
+            # Emit rank change if applicable
+            if old_rank != new_rank and new_rank > 0:
+                user = User.query.get(user_id)
+                emit_rank_change(
+                    contest_id, user_id,
+                    old_rank, new_rank,
+                    user.username if user else "Unknown",
+                )
+        except Exception as e:
+            print(f"[Leaderboard] SocketIO emit error (non-fatal): {e}")
+
+    @staticmethod
+    def get_performance_percentile(contest_id: int, user_id: int) -> float:
+        """Calculate 'Faster than X% of participants' for a user."""
+        participants = ContestParticipant.query.filter_by(contest_id=contest_id).all()
+        if not participants:
+            return 0.0
+
+        user_participant = None
+        for p in participants:
+            if p.user_id == user_id:
+                user_participant = p
+                break
+
+        if not user_participant:
+            return 0.0
+
+        # Count how many participants have a lower score (worse)
+        worse_count = sum(1 for p in participants if p.score < user_participant.score)
+        total = len(participants)
+
+        return round((worse_count / total) * 100, 1) if total > 0 else 0.0
 
     @staticmethod
     def get_leaderboard(contest_id: int) -> list[dict]:
@@ -123,6 +243,8 @@ class LeaderboardService:
                                 "username": user.username,
                                 "score": int(score),
                                 "problems_solved": participant.problems_solved if participant else 0,
+                                "penalty_time": participant.penalty_time if participant else 0,
+                                "is_flagged": participant.is_flagged if participant else False,
                             })
                             rank += 1
 
@@ -136,7 +258,7 @@ class LeaderboardService:
         participants = (
             ContestParticipant.query
             .filter_by(contest_id=contest_id)
-            .order_by(ContestParticipant.score.desc(), ContestParticipant.total_time.asc())
+            .order_by(ContestParticipant.score.desc(), ContestParticipant.penalty_time.asc())
             .all()
         )
 
@@ -149,6 +271,8 @@ class LeaderboardService:
                     "username": user.username,
                     "score": participant.score,
                     "problems_solved": participant.problems_solved,
+                    "penalty_time": participant.penalty_time or 0,
+                    "is_flagged": participant.is_flagged or False,
                 })
 
         # Cache DB result too

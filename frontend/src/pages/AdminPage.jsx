@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { contestsAPI, problemsAPI } from '../api/client';
+import { contestsAPI, problemsAPI, proctoringAPI } from '../api/client';
 
 export default function AdminPage() {
     const [activeTab, setActiveTab] = useState('contests');
@@ -20,6 +20,12 @@ export default function AdminPage() {
         time_limit: 2, memory_limit: 256, points: 100,
         test_cases: [{ input_data: '', expected_output: '', is_sample: false }],
     });
+
+    // Proctoring
+    const [selectedContestId, setSelectedContestId] = useState('');
+    const [violations, setViolations] = useState([]);
+    const [flaggedUsers, setFlaggedUsers] = useState([]);
+    const [proctorLoading, setProctorLoading] = useState(false);
 
     useEffect(() => {
         fetchContests();
@@ -112,13 +118,46 @@ export default function AdminPage() {
         }
     };
 
+    // ── Proctoring ────────────────────────────────────────────────────
+
+    const fetchProctoringData = async (contestId) => {
+        if (!contestId) return;
+        setProctorLoading(true);
+        try {
+            const [violationsRes, flaggedRes] = await Promise.all([
+                proctoringAPI.getViolations(contestId),
+                proctoringAPI.getFlagged(contestId),
+            ]);
+            setViolations(violationsRes.data.violations);
+            setFlaggedUsers(flaggedRes.data.flagged_users);
+        } catch (err) {
+            showMessage('error', 'Failed to load proctoring data');
+        } finally {
+            setProctorLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        if (activeTab === 'proctoring' && selectedContestId) {
+            fetchProctoringData(selectedContestId);
+        }
+    }, [activeTab, selectedContestId]);
+
     const inputCls = "input-field w-full text-sm";
     const labelCls = "mb-2 block text-xs font-semibold tracking-wide uppercase text-arena-text-muted";
+
+    const violationTypeLabels = {
+        tab_switch: { label: 'Tab Switch', icon: '🔀', color: 'text-arena-warning' },
+        window_blur: { label: 'Window Blur', icon: '👁', color: 'text-arena-info' },
+        copy_paste: { label: 'Copy/Paste', icon: '📋', color: 'text-arena-danger' },
+        right_click: { label: 'Right Click', icon: '🖱', color: 'text-arena-warning' },
+        fullscreen_exit: { label: 'Fullscreen Exit', icon: '⛶', color: 'text-arena-danger' },
+    };
 
     return (
         <div className="mx-auto max-w-5xl px-4 py-12 sm:px-6 animate-fade-in">
             <h1 className="mb-2 text-4xl font-bold tracking-tight text-arena-text">Workspace</h1>
-            <p className="mb-10 text-arena-text-muted text-lg">Manage contests, problems, and technical settings</p>
+            <p className="mb-10 text-arena-text-muted text-lg">Manage contests, problems, and proctoring</p>
 
             {message.text && (
                 <div className={`mb-8 rounded-md px-4 py-3 text-sm font-medium ${message.type === 'success'
@@ -133,14 +172,15 @@ export default function AdminPage() {
             <div className="mb-8 flex gap-2">
                 {[
                     { id: 'contests', label: 'Contests Setup' },
-                    { id: 'problems', label: 'Problem Editor' }
+                    { id: 'problems', label: 'Problem Editor' },
+                    { id: 'proctoring', label: 'Proctoring' },
                 ].map((tab) => (
                     <button
                         key={tab.id}
                         onClick={() => setActiveTab(tab.id)}
                         className={`cursor-pointer px-5 py-2 text-sm font-medium tracking-wide transition-colors rounded-md ${activeTab === tab.id
-                                ? 'bg-arena-surface border border-arena-border text-arena-text shadow-sm'
-                                : 'bg-transparent border border-transparent text-arena-text-muted hover:text-arena-text hover:bg-arena-surface-hover'
+                            ? 'bg-arena-surface border border-arena-border text-arena-text shadow-sm'
+                            : 'bg-transparent border border-transparent text-arena-text-muted hover:text-arena-text hover:bg-arena-surface-hover'
                             }`}
                     >
                         {tab.label}
@@ -297,7 +337,7 @@ export default function AdminPage() {
                             </div>
                         </div>
 
-                        {/* Test Cases Evaluator Section */}
+                        {/* Test Cases */}
                         <div className="pt-2">
                             <div className="flex items-center justify-between mb-4">
                                 <div>
@@ -353,6 +393,122 @@ export default function AdminPage() {
                             </button>
                         </div>
                     </form>
+                </div>
+            )}
+
+            {/* Proctoring Tab */}
+            {activeTab === 'proctoring' && (
+                <div className="space-y-8">
+                    {/* Contest selector */}
+                    <div className="rounded-lg border border-arena-border bg-arena-surface p-6">
+                        <label className={labelCls}>Select Contest</label>
+                        <select
+                            className={inputCls}
+                            value={selectedContestId}
+                            onChange={(e) => setSelectedContestId(e.target.value)}
+                        >
+                            <option value="">Choose a contest to review...</option>
+                            {contests.map((c) => (
+                                <option key={c.id} value={c.id}>{c.title} (ID: {c.id})</option>
+                            ))}
+                        </select>
+                    </div>
+
+                    {selectedContestId && (
+                        <>
+                            {/* Flagged Users */}
+                            <div className="rounded-lg border border-arena-border bg-arena-surface overflow-hidden">
+                                <div className="border-b border-arena-border px-6 py-4 bg-arena-danger/5">
+                                    <h3 className="text-base font-semibold text-arena-danger flex items-center gap-2">
+                                        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.232 16.5c-.77.833.192 2.5 1.732 2.5z" /></svg>
+                                        Flagged Participants
+                                    </h3>
+                                </div>
+                                {proctorLoading ? (
+                                    <div className="p-8 text-center"><div className="skeleton h-20 w-full" /></div>
+                                ) : flaggedUsers.length === 0 ? (
+                                    <div className="p-8 text-center text-sm text-arena-text-muted">
+                                        No flagged participants. All clear.
+                                    </div>
+                                ) : (
+                                    <div className="divide-y divide-arena-border/50">
+                                        {flaggedUsers.map((u) => (
+                                            <div key={u.user_id} className="flex items-center justify-between px-6 py-4 hover:bg-arena-bg transition-colors">
+                                                <div>
+                                                    <span className="font-medium text-arena-text">{u.username}</span>
+                                                    <div className="flex gap-4 text-xs text-arena-text-muted mt-1">
+                                                        <span>Score: {u.score}</span>
+                                                        <span>Solved: {u.problems_solved}</span>
+                                                    </div>
+                                                </div>
+                                                <span className="flex items-center gap-1.5 rounded-full bg-arena-danger/10 border border-arena-danger/20 px-3 py-1 text-xs font-bold text-arena-danger">
+                                                    {u.violation_count} violations
+                                                </span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Violation Log */}
+                            <div className="rounded-lg border border-arena-border bg-arena-surface overflow-hidden">
+                                <div className="border-b border-arena-border px-6 py-4">
+                                    <h3 className="text-base font-semibold text-arena-text">Violation Log</h3>
+                                </div>
+                                {proctorLoading ? (
+                                    <div className="p-8 text-center"><div className="skeleton h-40 w-full" /></div>
+                                ) : violations.length === 0 ? (
+                                    <div className="p-8 text-center text-sm text-arena-text-muted">
+                                        No violations recorded for this contest.
+                                    </div>
+                                ) : (
+                                    <div className="divide-y divide-arena-border/50">
+                                        {violations.map((userViolations) => (
+                                            <div key={userViolations.user_id} className="px-6 py-5">
+                                                <div className="flex items-center justify-between mb-3">
+                                                    <div className="flex items-center gap-3">
+                                                        <span className="font-semibold text-arena-text">{userViolations.username}</span>
+                                                        {userViolations.is_flagged && (
+                                                            <span className="rounded bg-arena-danger/10 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-arena-danger">
+                                                                FLAGGED
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                    <span className="text-xs font-mono text-arena-text-muted">
+                                                        {userViolations.violation_count} total
+                                                    </span>
+                                                </div>
+                                                <div className="space-y-2">
+                                                    {userViolations.violations.slice(0, 10).map((v) => {
+                                                        const typeConfig = violationTypeLabels[v.violation_type] || { label: v.violation_type, icon: '❓', color: 'text-arena-text-muted' };
+                                                        return (
+                                                            <div key={v.id} className="flex items-center justify-between rounded bg-arena-bg border border-arena-border/50 px-3 py-2">
+                                                                <div className="flex items-center gap-3">
+                                                                    <span className="text-sm">{typeConfig.icon}</span>
+                                                                    <span className={`text-xs font-semibold ${typeConfig.color}`}>{typeConfig.label}</span>
+                                                                    {v.details && (
+                                                                        <span className="text-xs text-arena-text-muted truncate max-w-[200px]">{v.details}</span>
+                                                                    )}
+                                                                </div>
+                                                                <span className="text-[10px] font-mono text-arena-text-muted">
+                                                                    {new Date(v.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                                                                </span>
+                                                            </div>
+                                                        );
+                                                    })}
+                                                    {userViolations.violations.length > 10 && (
+                                                        <p className="text-xs text-arena-text-muted text-center pt-1">
+                                                            + {userViolations.violations.length - 10} more violations
+                                                        </p>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                        </>
+                    )}
                 </div>
             )}
         </div>

@@ -83,3 +83,11 @@ class SubmissionCreateSchema(Schema):
     contest_id = fields.Int(required=True)
     code = fields.Str(required=True, validate=validate.Length(min=1, max=50000))
     language = fields.Str(load_default="python", validate=validate.OneOf(["python"]))
+
+
+class RunCodeSchema(Schema):
+    """Schema for RUN mode — runs sample test cases only."""
+    problem_id = fields.Int(required=True)
+    contest_id = fields.Int(required=True)
+    code = fields.Str(required=True, validate=validate.Length(min=1, max=50000))
+    language = fields.Str(load_default="python", validate=validate.OneOf(["python"]))

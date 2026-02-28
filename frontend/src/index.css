@@ -166,3 +166,61 @@ body {
   border-radius: 0;
   /* Remove border radius inside editor split pane to feel native */
 }
+
+/* ── Input Fields ──────────────────────────────────────────────── */
+
+.input-field {
+  @apply rounded-md border border-arena-border bg-arena-bg px-4 py-2.5 text-arena-text placeholder:text-arena-text-muted/40 transition-colors duration-150 outline-none;
+}
+
+.input-field:focus {
+  @apply border-arena-primary ring-1 ring-arena-primary/20;
+}
+
+/* ── Live Rank Animations ──────────────────────────────────────── */
+
+@keyframes rankUp {
+  0% {
+    background-color: transparent;
+  }
+
+  20% {
+    background-color: rgba(34, 197, 94, 0.12);
+    transform: translateY(-2px);
+  }
+
+  100% {
+    background-color: transparent;
+    transform: translateY(0);
+  }
+}
+
+@keyframes rankDown {
+  0% {
+    background-color: transparent;
+  }
+
+  20% {
+    background-color: rgba(239, 68, 68, 0.08);
+    transform: translateY(2px);
+  }
+
+  100% {
+    background-color: transparent;
+    transform: translateY(0);
+  }
+}
+
+.animate-rank-up {
+  animation: rankUp 1.5s cubic-bezier(0.4, 0, 0.2, 1) both;
+}
+
+.animate-rank-down {
+  animation: rankDown 1.5s cubic-bezier(0.4, 0, 0.2, 1) both;
+}
+
+/* ── Surface interaction ───────────────────────────────────────── */
+
+.surface-2 {
+  @apply bg-arena-surface;
+}

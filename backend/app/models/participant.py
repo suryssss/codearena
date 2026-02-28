@@ -12,7 +12,10 @@ class ContestParticipant(db.Model):
     contest_id = db.Column(db.Integer, db.ForeignKey("contests.id"), nullable=False)
     score = db.Column(db.Integer, default=0)
     problems_solved = db.Column(db.Integer, default=0)
-    total_time = db.Column(db.Integer, default=0)  # total time in seconds
+    total_time = db.Column(db.Integer, default=0)  # total penalty time in seconds
+    penalty_time = db.Column(db.Integer, default=0)  # cumulative penalty
+    violation_count = db.Column(db.Integer, default=0)
+    is_flagged = db.Column(db.Boolean, default=False)
     joined_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
 
     # Unique constraint: user can join a contest only once
@@ -28,6 +31,9 @@ class ContestParticipant(db.Model):
             "score": self.score,
             "problems_solved": self.problems_solved,
             "total_time": self.total_time,
+            "penalty_time": self.penalty_time,
+            "violation_count": self.violation_count,
+            "is_flagged": self.is_flagged,
             "joined_at": self.joined_at.isoformat() if self.joined_at else None,
         }
 

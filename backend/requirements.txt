@@ -15,6 +15,10 @@ bcrypt==4.3.0
 redis==5.2.1
 rq==2.1.0
 
+# Real-time
+Flask-SocketIO==5.5.1
+eventlet==0.40.0
+
 # Utilities
 python-dotenv==1.0.1
 marshmallow==3.25.1

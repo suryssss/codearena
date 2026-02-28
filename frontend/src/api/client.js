@@ -65,16 +65,31 @@ export const problemsAPI = {
 // ── Submissions ───────────────────────────────────────────────────
 
 export const submissionsAPI = {
+    // SUBMIT mode: full judging, saved to DB, updates leaderboard
     create: (data) => api.post('/submissions', data),
+    // RUN mode: sample test cases only, detailed output, not saved
+    run: (data) => api.post('/submissions/run', data),
     get: (id) => api.get(`/submissions/${id}`),
     my: (contestId) => api.get('/submissions/my', { params: { contest_id: contestId } }),
     forProblem: (problemId) => api.get(`/submissions/problem/${problemId}`),
+    // Admin: replay a submission
+    replay: (id) => api.post(`/submissions/${id}/replay`),
 };
 
 // ── Leaderboard ───────────────────────────────────────────────────
 
 export const leaderboardAPI = {
     get: (contestId) => api.get(`/leaderboard/${contestId}`),
+    percentile: (contestId) => api.get(`/leaderboard/${contestId}/percentile`),
+};
+
+// ── Proctoring ────────────────────────────────────────────────────
+
+export const proctoringAPI = {
+    logViolation: (data) => api.post('/proctoring/violation', data),
+    getViolations: (contestId) => api.get(`/proctoring/violations/${contestId}`),
+    getFlagged: (contestId) => api.get(`/proctoring/flagged/${contestId}`),
+    getStatus: (contestId) => api.get(`/proctoring/status/${contestId}`),
 };
 
 export default api;
