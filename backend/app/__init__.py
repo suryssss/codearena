@@ -55,6 +55,10 @@ def create_app(config_name: str = None) -> Flask:
     # ── Register blueprints ──────────────────────────────────────────
     _register_blueprints(app)
 
+    @app.route("/")
+    def index():
+        return {"message": "CodeArena API Server Running", "status": "ok"}
+
     # ── Register SocketIO event handlers ─────────────────────────────
     _register_socket_events(app)
 

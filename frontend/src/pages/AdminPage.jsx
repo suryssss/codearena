@@ -117,9 +117,6 @@ export default function AdminPage() {
             showMessage('error', 'Failed to delete contest');
         }
     };
-
-    // ── Proctoring ────────────────────────────────────────────────────
-
     const fetchProctoringData = async (contestId) => {
         if (!contestId) return;
         setProctorLoading(true);

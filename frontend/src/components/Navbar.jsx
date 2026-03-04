@@ -15,7 +15,7 @@ export default function Navbar() {
             <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-4">
                 {/* Logo */}
                 <Link to="/" className="flex items-center gap-3 text-xl font-semibold no-underline text-arena-text group animate-fade-in-delay">
-                    {/* Minimalist Logo Icon */}
+                    {/* Logo Icon */}
                     <svg className="w-5 h-5 text-arena-primary group-hover:text-arena-primary-hover transition-colors duration-200" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                         <polyline points="16 18 22 12 16 6"></polyline>
                         <polyline points="8 6 2 12 8 18"></polyline>

@@ -6,7 +6,7 @@ export default function HomePage() {
 
     return (
         <div className="relative min-h-[calc(100vh-64px)] flex flex-col items-center justify-center overflow-hidden">
-            {/* Minimalist ambient background glow */}
+            {/*Background glow */}
             <div className="pointer-events-none absolute inset-0 overflow-hidden">
                 <div className="absolute left-1/2 top-0 h-[500px] w-[800px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-arena-primary/10 opacity-50 blur-[120px]" />
             </div>
@@ -46,7 +46,7 @@ export default function HomePage() {
                     </div>
                 </div>
 
-                {/* Strict Minimal Features Grid */}
+                {/*  Features Grid */}
                 <div className="mt-32 w-full grid gap-4 sm:grid-cols-3 animate-fade-in-delay text-left">
                     {[
                         {

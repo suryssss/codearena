@@ -134,8 +134,9 @@ class CodeExecutor:
 
             start_time = time.time()
             try:
+                import sys
                 result = subprocess.run(
-                    ["python", code_file],
+                    [sys.executable, code_file],
                     input=input_data,
                     capture_output=True,
                     timeout=timeout,

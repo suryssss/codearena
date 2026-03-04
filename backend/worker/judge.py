@@ -82,18 +82,18 @@ def judge_submission(submission_id: int, executor: CodeExecutor) -> None:
         # Check for TLE
         if result["timed_out"]:
             final_status = Submission.STATUS_TIME_LIMIT
-            # No detailed error message in SUBMIT mode
+            #error message in SUBMIT mode
             submission.error_message = "Time limit exceeded"
             break
 
         # Check for runtime error
         if result["exit_code"] != 0:
             final_status = Submission.STATUS_RUNTIME_ERROR
-            # No detailed stack trace in SUBMIT mode
+            #stack trace in SUBMIT mode
             submission.error_message = "Runtime error"
             break
 
-        # Compare output (strip trailing whitespace/newlines)
+        # Compare output
         actual = result["stdout"].strip()
         expected = tc.expected_output.strip()
 

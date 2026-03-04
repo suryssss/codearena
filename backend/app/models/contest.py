@@ -19,6 +19,10 @@ class Contest(db.Model):
     # Relationships
     problems = db.relationship("Problem", backref="contest", lazy="dynamic", cascade="all, delete-orphan")
     participants = db.relationship("ContestParticipant", backref="contest", lazy="dynamic", cascade="all, delete-orphan")
+    submissions = db.relationship("Submission", backref="contest_ref", overlaps="contest", lazy="dynamic", cascade="all, delete-orphan")
+    proctoring_violations = db.relationship("ProctoringViolation", backref="contest_ref", overlaps="contest", lazy="dynamic", cascade="all, delete-orphan")
+
+
 
     @property
     def status(self) -> str:

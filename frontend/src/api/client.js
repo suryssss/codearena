@@ -14,11 +14,14 @@ api.interceptors.request.use((config) => {
     return config;
 });
 
-// Handle 401 globally
+// Handle 401 and 422 (JWT invalid signature) globally
 api.interceptors.response.use(
     (response) => response,
     (error) => {
-        if (error.response?.status === 401) {
+        const isAuthError = error.response?.status === 401 ||
+            (error.response?.status === 422 && error.response?.data?.msg && error.response.data.msg.includes('Signature'));
+
+        if (isAuthError) {
             localStorage.removeItem('token');
             localStorage.removeItem('user');
             // Only redirect if not already on login/register

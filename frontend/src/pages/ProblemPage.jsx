@@ -83,7 +83,7 @@ export default function ProblemPage() {
         return () => { if (pollRef.current) clearInterval(pollRef.current); };
     }, [problemId, isAuthenticated]);
 
-    // ── RUN: Execute sample test cases only ─────────────────────────
+    // Run
     const handleRun = async () => {
         if (!code.trim()) return;
         setRunning(true);
@@ -106,7 +106,7 @@ export default function ProblemPage() {
         }
     };
 
-    // ── SUBMIT: Full judging with all test cases ────────────────────
+    // Submission
     const handleSubmit = async () => {
         if (!code.trim()) return;
         setSubmitting(true);
@@ -124,7 +124,7 @@ export default function ProblemPage() {
             const newSubmission = res.data.submission;
             setSubmissions((prev) => [newSubmission, ...prev]);
 
-            // Poll for result as fallback (SocketIO should handle this faster)
+            // Poll for result as fallback
             pollRef.current = setInterval(async () => {
                 try {
                     const check = await submissionsAPI.get(newSubmission.id);
@@ -212,7 +212,7 @@ export default function ProblemPage() {
 
                 {/* Panel Content */}
                 <div className="flex-1 overflow-y-auto p-8">
-                    {/* ─── Description Panel ─────────────────────── */}
+                    {/* Description Panel */}
                     {activePanel === 'description' && (
                         <div className="animate-fade-in max-w-3xl">
                             <div className="mb-6 flex flex-col gap-2">
@@ -280,7 +280,7 @@ export default function ProblemPage() {
                         </div>
                     )}
 
-                    {/* ─── Output Panel (RUN results) ────────────── */}
+                    {/* Output Panel (RUN results)  */}
                     {activePanel === 'output' && (
                         <div className="animate-fade-in max-w-3xl">
                             <h2 className="mb-6 text-base font-semibold text-arena-text border-b border-arena-border pb-2">
@@ -369,7 +369,7 @@ export default function ProblemPage() {
                         </div>
                     )}
 
-                    {/* ─── Submissions Panel ──────────────────────── */}
+                    {/* Submissions Panel */}
                     {activePanel === 'submissions' && (
                         <div className="animate-fade-in max-w-3xl">
                             <h2 className="mb-6 text-base font-semibold text-arena-text border-b border-arena-border pb-2">Submission History</h2>

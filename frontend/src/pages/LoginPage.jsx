@@ -26,7 +26,7 @@ export default function LoginPage() {
 
     return (
         <div className="flex min-h-[calc(100vh-64px)] items-center justify-center px-4 bg-arena-bg relative overflow-hidden">
-            {/* Minimalist ambient background glow */}
+            {/* background glow */}
             <div className="pointer-events-none absolute inset-0 overflow-hidden">
                 <div className="absolute left-1/2 top-1/2 h-[400px] w-[600px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-arena-primary/5 opacity-50 blur-[100px]" />
             </div>

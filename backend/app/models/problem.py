@@ -21,7 +21,8 @@ class Problem(db.Model):
 
     # Relationships
     test_cases = db.relationship("TestCase", backref="problem", lazy="dynamic", cascade="all, delete-orphan")
-    submissions = db.relationship("Submission", backref="problem", lazy="dynamic")
+    submissions = db.relationship("Submission", backref="problem_ref", overlaps="problem", lazy="dynamic", cascade="all, delete-orphan")
+
 
     def to_dict(self, include_test_cases: bool = False) -> dict:
         data = {
