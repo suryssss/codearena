@@ -24,7 +24,6 @@ api.interceptors.response.use(
         if (isAuthError) {
             localStorage.removeItem('token');
             localStorage.removeItem('user');
-            // Only redirect if not already on login/register
             if (!window.location.pathname.includes('/login') && !window.location.pathname.includes('/register')) {
                 window.location.href = '/login';
             }
@@ -33,7 +32,7 @@ api.interceptors.response.use(
     }
 );
 
-// ── Auth ──────────────────────────────────────────────────────────
+// Auth
 
 export const authAPI = {
     register: (data) => api.post('/auth/register', data),
@@ -41,7 +40,7 @@ export const authAPI = {
     getProfile: () => api.get('/auth/me'),
 };
 
-// ── Contests ──────────────────────────────────────────────────────
+//Contests
 
 export const contestsAPI = {
     list: () => api.get('/contests'),
@@ -53,7 +52,7 @@ export const contestsAPI = {
     status: (id) => api.get(`/contests/${id}/status`),
 };
 
-// ── Problems ──────────────────────────────────────────────────────
+//Problems
 
 export const problemsAPI = {
     listForContest: (contestId) => api.get(`/problems/contest/${contestId}`),
@@ -65,12 +64,12 @@ export const problemsAPI = {
     deleteTestCase: (id) => api.delete(`/problems/test-cases/${id}`),
 };
 
-// ── Submissions ───────────────────────────────────────────────────
+//  Submissions
 
 export const submissionsAPI = {
-    // SUBMIT mode: full judging, saved to DB, updates leaderboard
+    // SUBMIT mode
     create: (data) => api.post('/submissions', data),
-    // RUN mode: sample test cases only, detailed output, not saved
+    // RUN mode
     run: (data) => api.post('/submissions/run', data),
     get: (id) => api.get(`/submissions/${id}`),
     my: (contestId) => api.get('/submissions/my', { params: { contest_id: contestId } }),
@@ -79,14 +78,13 @@ export const submissionsAPI = {
     replay: (id) => api.post(`/submissions/${id}/replay`),
 };
 
-// ── Leaderboard ───────────────────────────────────────────────────
-
+// Leaderboard 
 export const leaderboardAPI = {
     get: (contestId) => api.get(`/leaderboard/${contestId}`),
     percentile: (contestId) => api.get(`/leaderboard/${contestId}/percentile`),
 };
 
-// ── Proctoring ────────────────────────────────────────────────────
+// Proctoring
 
 export const proctoringAPI = {
     logViolation: (data) => api.post('/proctoring/violation', data),
