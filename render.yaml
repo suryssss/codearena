@@ -47,6 +47,7 @@ services:
   - type: redis
     name: codearena-redis
     plan: free
+    ipAllowList: []
 
 databases:
   - name: codearena-db
