@@ -572,3 +572,53 @@ frontend
 ├── editor
 ├── contest
 └── leaderboard
+
+To fully scale your project to handle 1000 concurrent users and make it production-ready as defined in
+
+Agent.md
+, we need to focus on these 4 core areas:
+
+1. True Docker Sandboxing (Security + Stability)
+   Right now, the
+
+executor.py
+script attempts to use Docker, but heavily falls back to a raw
+
+subprocess
+(python solution.py) locally on the server.
+
+Why it must change: Running raw
+
+subprocess
+is extremely dangerous. A malicious user could submit code like import os; os.system("rm -rf /") and destroy your backend or steal environment variables.
+Action:
+We must install Docker Engine on the deployment server.
+Build specific images (e.g., python:3.11-slim) inside the worker.
+Enforce strict Docker boundaries defined in
+
+Agent.md
+: --network none (prevent API access), --read-only, --memory=256m, --cpus=0.5. 2. Horizontal Scaling Configuration (Infra)
+To handle 1000 users submitting 200 codes concurrently, a single backend server goes down fast.
+
+Action:
+Wrap the Flask backend inside Gunicorn in production (gunicorn -w 4 -k eventlet run:app).
+Implement a unified nginx reverse proxy that load balances traffic between at least 2 Backend API instances and serves the React frontend statically.
+Spin up 3-5 separate Judge Worker instances that do nothing but listen to the Redis queue and fire off Docker containers. 3. Transition from Threads to Celery / RQ
+Currently, your background worker is either using a background Thread or a single polling loop in
+
+judge.py
+.
+
+Action: Convert the judge queue processor to use Celery or Python RQ (which is in your
+
+requirements.txt
+). This allows you to easily scale from 1 judge worker to 10 judge workers across different physical servers all securely listening to the same Redis instance. 4. Multi-Language Support
+Right now, the API only parses "python".
+
+Action: We need to update
+
+executor.py
+to support cpp (requires a compiler step via g++), java (javac), and javascript (node). This will require setting up unique Dockerfile environments for each. 5. S3 / MinIO Object Storage for Test Cases
+Storing large test case inputs (e.g., arrays of 100,000 numbers) inside PostgreSQL TEXT columns will bloat your database and slow down queries drastically.
+
+Action: Implement an integration with AWS S3 or MinIO. The database should only store the URL pointers to input1.txt and output1.txt, and the judge worker will download them into the secure Docker volume during execution.

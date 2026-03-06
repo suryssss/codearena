@@ -1,0 +1,55 @@
+services:
+  # 1. Flask Web Service (API)
+  - type: web
+    name: codearena-api
+    runtime: python
+    rootDirectory: backend
+    buildCommand: "pip install -r requirements.txt"
+    startCommand: "gunicorn --worker-class eventlet -w 1 run:app"
+    envVars:
+      - key: FLASK_ENV
+        value: production
+      - key: DATABASE_URL
+        fromDatabase:
+          name: codearena-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: codearena-redis
+          property: connectionString
+      - key: SECRET_KEY
+        generateValue: true
+      - key: JWT_SECRET_KEY
+        generateValue: true
+
+  # 2. Background Worker (The Judge)
+  - type: worker
+    name: codearena-judge
+    runtime: python
+    rootDirectory: backend
+    buildCommand: "pip install -r requirements.txt"
+    startCommand: "python -m worker.judge"
+    envVars:
+      - key: FLASK_ENV
+        value: production
+      - key: DATABASE_URL
+        fromDatabase:
+          name: codearena-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: codearena-redis
+          property: connectionString
+
+# 3. Managed Databases
+databases:
+  - name: codearena-db
+    plan: free
+
+# 4. Managed Redis
+redis:
+  - name: codearena-redis
+    plan: free
+    ipAllowList: []
