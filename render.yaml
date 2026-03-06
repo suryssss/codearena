@@ -23,7 +23,7 @@ services:
       - key: JWT_SECRET_KEY
         generateValue: true
 
-  # 2. Background Worker (The Judge)
+  # 2. Background Worker (Judge)
   - type: worker
     name: codearena-judge
     runtime: python
@@ -43,13 +43,11 @@ services:
           name: codearena-redis
           property: connectionString
 
-# 3. Managed Databases
+  # 3. Redis Service
+  - type: redis
+    name: codearena-redis
+    plan: free
+
 databases:
   - name: codearena-db
     plan: free
-
-# 4. Managed Redis
-redis:
-  name: codearena-redis
-  plan: free
-  ipAllowList: []
