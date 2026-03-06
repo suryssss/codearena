@@ -49,7 +49,7 @@ databases:
     plan: free
 
 # 4. Managed Redis
-redis:
+redisInstances:
   - name: codearena-redis
     plan: free
     ipAllowList: []
