@@ -3,7 +3,7 @@ services:
   - type: web
     name: codearena-api
     runtime: python
-    rootDirectory: backend
+    rootDir: backend
     buildCommand: "pip install -r requirements.txt"
     startCommand: "gunicorn --worker-class eventlet -w 1 run:app"
     envVars:
@@ -27,7 +27,7 @@ services:
   - type: worker
     name: codearena-judge
     runtime: python
-    rootDirectory: backend
+    rootDir: backend
     buildCommand: "pip install -r requirements.txt"
     startCommand: "python -m worker.judge"
     envVars:
