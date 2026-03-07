@@ -1,12 +1,21 @@
 """
-Judge worker — pulls submissions from Redis queue and evaluates them.
+Judge worker — pulls submissions from Redis queues and evaluates them.
 
 This runs as a separate process from the Flask app.
 Usage: python -m worker.judge
+
+Handles TWO queues:
+  1. judge_queue — SUBMIT mode (full test case judging, saved to DB)
+  2. run_queue   — RUN mode (sample test cases only, result cached in Redis)
+
+Both queues can be consumed by multiple worker instances for horizontal scale.
+Just spin up more workers:  python -m worker.judge
+They'll all safely compete for items on the same Redis queues.
 """
 
 import sys
 import os
+import json
 import time
 
 # Add project root to path so we can import app
@@ -145,33 +154,142 @@ def _emit_submission_status(submission: Submission) -> None:
         print(f"[Judge] SocketIO emit error (non-fatal): {e}")
 
 
+# RUN Queue Processing
+
+def process_run_job(job_payload: dict, executor: CodeExecutor) -> None:
+    """
+    Process a RUN mode job — execute code against sample test cases.
+
+    Results are:
+    1. Emitted via SocketIO 'run_result' to the user's personal room
+    2. Cached in Redis for 5 minutes as a polling fallback
+    """
+    job_id = job_payload["job_id"]
+    user_id = job_payload["user_id"]
+    code = job_payload["code"]
+    time_limit = job_payload.get("time_limit", 5.0)
+    test_cases = job_payload["test_cases"]
+
+    print(f"[Run Worker] Processing job {job_id} for user {user_id}")
+
+    results = []
+    overall_status = "passed"
+
+    for i, tc_data in enumerate(test_cases):
+        exec_result = executor.execute(
+            code=code,
+            input_data=tc_data["input_data"],
+            timeout=time_limit,
+        )
+
+        actual = exec_result["stdout"].strip()
+        expected = tc_data["expected_output"].strip()
+
+        if exec_result["timed_out"]:
+            tc_status = "time_limit_exceeded"
+            overall_status = "time_limit_exceeded"
+        elif exec_result["exit_code"] != 0:
+            tc_status = "runtime_error"
+            overall_status = "runtime_error"
+        elif actual == expected:
+            tc_status = "passed"
+        else:
+            tc_status = "wrong_answer"
+            overall_status = "wrong_answer"
+
+        results.append({
+            "test_case": i + 1,
+            "status": tc_status,
+            "input": tc_data["input_data"],
+            "expected_output": expected,
+            "actual_output": actual,
+            "stdout": exec_result["stdout"],
+            "stderr": exec_result["stderr"],
+            "execution_time": round(exec_result["execution_time"], 4),
+        })
+
+        if tc_status != "passed":
+            break
+
+    run_result = {
+        "status": overall_status,
+        "job_id": job_id,
+        "passed": sum(1 for r in results if r["status"] == "passed"),
+        "total": len(test_cases),
+        "results": results,
+    }
+
+    # 1. Cache result in Redis for polling fallback (5 min TTL)
+    redis_client = ext.redis_client
+    if redis_client:
+        try:
+            redis_client.setex(
+                f"run_result:{job_id}",
+                300,  # 5 minutes
+                json.dumps(run_result),
+            )
+        except Exception as e:
+            print(f"[Run Worker] Redis cache error (non-fatal): {e}")
+
+    # 2. Emit result via SocketIO to user's personal room
+    try:
+        from app.sockets.events import emit_run_result
+        emit_run_result(user_id, run_result)
+    except Exception as e:
+        print(f"[Run Worker] SocketIO emit error (non-fatal): {e}")
+
+    print(f"[Run Worker] Job {job_id}: {overall_status}")
+
+
+# Main Worker Loop
+
 def run_worker():
     """
-    Main worker loop — polls Redis queue for new submissions.
+    Main worker loop — polls BOTH Redis queues:
+    1. judge_queue (SUBMIT mode submissions)
+    2. run_queue   (RUN mode sample test execution)
+
+    BLPOP listens on both queues simultaneously.
+    Spin up multiple instances for horizontal scaling.
     """
     app = create_app()
     executor = CodeExecutor(use_docker=True)
 
-    print("[Judge Worker] Starting...")
+    print("=" * 60)
+    print("[Judge Worker] Starting CodeArena Judge Worker")
     print(f"[Judge Worker] Docker mode: {executor.use_docker}")
-    print("[Judge Worker] Waiting for submissions...")
+    print("[Judge Worker] Listening on: judge_queue, run_queue")
+    print("[Judge Worker] Waiting for jobs...")
+    print("=" * 60)
 
     with app.app_context():
         redis_client = ext.redis_client
 
         while True:
             try:
-                # BLPOP blocks until a submission is available (5s timeout)
-                item = redis_client.blpop("judge_queue", timeout=5)
+                # BLPOP blocks until an item is available on EITHER queue
+                # Priority: judge_queue first, then run_queue
+                item = redis_client.blpop(
+                    ["judge_queue", "run_queue"],
+                    timeout=5,
+                )
 
                 if item is None:
                     continue  # Timeout, loop back
 
-                _, submission_id_str = item
-                submission_id = int(submission_id_str)
-                print(f"\n[Judge Worker] Processing submission {submission_id}")
+                queue_name, payload_str = item
 
-                judge_submission(submission_id, executor)
+                if queue_name == "judge_queue":
+                    # SUBMIT mode — payload is a submission ID
+                    submission_id = int(payload_str)
+                    print(f"\n[Judge Worker] SUBMIT job: submission {submission_id}")
+                    judge_submission(submission_id, executor)
+
+                elif queue_name == "run_queue":
+                    # RUN mode — payload is a JSON object
+                    job_payload = json.loads(payload_str)
+                    print(f"\n[Judge Worker] RUN job: {job_payload['job_id']}")
+                    process_run_job(job_payload, executor)
 
             except KeyboardInterrupt:
                 print("\n[Judge Worker] Shutting down...")

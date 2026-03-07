@@ -14,12 +14,15 @@ api.interceptors.request.use((config) => {
     return config;
 });
 
-// Handle 401 and 422 (JWT invalid signature) globally
+// Handle 401, 422, and 429 (rate limited) globally
 api.interceptors.response.use(
     (response) => response,
     (error) => {
-        const isAuthError = error.response?.status === 401 ||
-            (error.response?.status === 422 && error.response?.data?.msg && error.response.data.msg.includes('Signature'));
+        const status = error.response?.status;
+
+        // Auth errors
+        const isAuthError = status === 401 ||
+            (status === 422 && error.response?.data?.msg && error.response.data.msg.includes('Signature'));
 
         if (isAuthError) {
             localStorage.removeItem('token');
@@ -28,6 +31,13 @@ api.interceptors.response.use(
                 window.location.href = '/login';
             }
         }
+
+        // Rate limit error — show a user-friendly message
+        if (status === 429) {
+            const retryAfter = error.response?.headers?.['retry-after'] || '60';
+            error.friendlyMessage = `Too many requests. Please wait ${retryAfter}s before trying again.`;
+        }
+
         return Promise.reject(error);
     }
 );
@@ -69,8 +79,10 @@ export const problemsAPI = {
 export const submissionsAPI = {
     // SUBMIT mode
     create: (data) => api.post('/submissions', data),
-    // RUN mode
+    // RUN mode (async — returns job_id, results arrive via SocketIO)
     run: (data) => api.post('/submissions/run', data),
+    // RUN mode polling fallback
+    getRunResult: (jobId) => api.get(`/submissions/run/${jobId}`),
     get: (id) => api.get(`/submissions/${id}`),
     my: (contestId) => api.get('/submissions/my', { params: { contest_id: contestId } }),
     forProblem: (problemId) => api.get(`/submissions/problem/${problemId}`),

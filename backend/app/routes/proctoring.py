@@ -6,6 +6,7 @@ from flask_jwt_extended import jwt_required
 from app.services.proctoring_service import ProctoringService
 from app.utils.decorators import admin_required
 from app.utils.jwt_helpers import get_current_user_id
+from app.extensions import limiter
 
 proctoring_bp = Blueprint("proctoring", __name__)
 
@@ -15,6 +16,7 @@ VIOLATION_THRESHOLD = 5
 
 @proctoring_bp.route("/violation", methods=["POST"])
 @jwt_required()
+@limiter.limit("30/minute")
 def log_violation():
     """Log a proctoring violation from the frontend."""
     user_id = get_current_user_id()

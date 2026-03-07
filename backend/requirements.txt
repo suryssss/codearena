@@ -19,6 +19,10 @@ rq==2.1.0
 Flask-SocketIO==5.5.1
 eventlet==0.40.0
 
+# Rate Limiting
+Flask-Limiter==3.12
+Flask-Limiter[redis]
+
 # Utilities
 python-dotenv==1.0.1
 marshmallow==3.25.1
@@ -26,5 +30,5 @@ marshmallow==3.25.1
 # Docker (for judge)
 docker==7.1.0
 
-# Dev
+# Production Server
 gunicorn==23.0.0

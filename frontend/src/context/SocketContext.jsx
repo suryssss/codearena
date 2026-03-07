@@ -13,15 +13,32 @@ export function SocketProvider({ children }) {
         const socket = io('/', {
             transports: ['websocket', 'polling'],
             autoConnect: true,
+            // Reconnection settings for resilience under load
+            reconnection: true,
+            reconnectionAttempts: 10,
+            reconnectionDelay: 1000,
+            reconnectionDelayMax: 5000,
         });
 
         socket.on('connect', () => {
             console.log('[Socket] Connected:', socket.id);
             setIsConnected(true);
+
+            // Auto-join user's personal room for RUN results
+            const userData = localStorage.getItem('user');
+            if (userData) {
+                try {
+                    const user = JSON.parse(userData);
+                    if (user?.id) {
+                        socket.emit('join_user', { user_id: user.id });
+                        console.log('[Socket] Joined personal room: user_' + user.id);
+                    }
+                } catch { }
+            }
         });
 
-        socket.on('disconnect', () => {
-            console.log('[Socket] Disconnected');
+        socket.on('disconnect', (reason) => {
+            console.log('[Socket] Disconnected:', reason);
             setIsConnected(false);
         });
 

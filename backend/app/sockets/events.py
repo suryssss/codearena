@@ -3,6 +3,7 @@ SocketIO event handlers for CodeArena.
 
 Events emitted by the server:
   - submission_result: When a submission finishes judging
+  - run_result: When a RUN mode job finishes (async code execution)
   - leaderboard_update: When leaderboard data changes
   - contest_timer_update: Periodic contest timer sync
   - rank_change: When a user's rank changes after submission
@@ -10,6 +11,7 @@ Events emitted by the server:
 Events received from client:
   - join_contest: Client joins a contest room for real-time updates
   - leave_contest: Client leaves a contest room
+  - join_user: Client joins a personal room for RUN results
 """
 
 from flask_socketio import emit, join_room, leave_room
@@ -50,12 +52,37 @@ def handle_leave_contest(data):
         print(f"[SocketIO] Client {request.sid} left room {room}")
 
 
+@socketio.on("join_user")
+def handle_join_user(data):
+    """Client joins a personal room for receiving RUN results."""
+    user_id = data.get("user_id")
+    if user_id:
+        room = f"user_{user_id}"
+        join_room(room)
+        print(f"[SocketIO] Client {request.sid} joined personal room {room}")
+
+
 def emit_submission_result(contest_id: int, submission_data: dict):
     """Emit submission result to the specific user and contest room."""
     socketio.emit(
         "submission_result",
         submission_data,
         room=f"contest_{contest_id}",
+    )
+
+
+def emit_run_result(user_id: int, run_data: dict):
+    """
+    Emit RUN mode result to the specific user's personal room.
+
+    This is the async delivery mechanism for the decoupled RUN mode.
+    The user joins 'user_{user_id}' room on connection, and the worker
+    emits the result here after execution finishes.
+    """
+    socketio.emit(
+        "run_result",
+        run_data,
+        room=f"user_{user_id}",
     )
 
 

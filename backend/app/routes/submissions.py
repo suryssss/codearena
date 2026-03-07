@@ -1,4 +1,14 @@
-"""Submission routes — run code, submit code, check results."""
+"""Submission routes — run code, submit code, check results.
+
+Scaling changes:
+- RUN mode is now async: code is queued via Redis and results are
+  delivered via SocketIO (run_result event) instead of blocking the
+  HTTP request. This prevents 500 concurrent "Run" clicks from
+  freezing the API.
+- Rate limits on /run (10/min) and /submit (5/min) prevent a single
+  user from overwhelming the judge queue.
+- A /run/<job_id> polling endpoint is provided as a fallback.
+"""
 
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required
@@ -6,23 +16,25 @@ from flask_jwt_extended import jwt_required
 from app.services.submission_service import SubmissionService
 from app.utils.validators import SubmissionCreateSchema, RunCodeSchema
 from app.utils.jwt_helpers import get_current_user_id, get_current_user_claims
+from app.extensions import limiter
 
 submissions_bp = Blueprint("submissions", __name__)
 
 
-# ── RUN Mode ─────────────────────────────────────────────────────
-# Execute only sample/visible test cases
-# Return detailed output (stdout, stderr, stack trace, execution time)
-# Do NOT save to DB, do NOT update leaderboard
+# RUN Mode (now async)
+# Queue code for execution against sample test cases.
+# Returns a job_id immediately. Results arrive via SocketIO 'run_result'.
+# This is the key change that prevents the API from freezing under load.
 
 @submissions_bp.route("/run", methods=["POST"])
 @jwt_required()
+@limiter.limit("10/minute")
 def run_code():
-    """Run code against sample test cases only. Returns detailed output."""
+    """Queue code for async execution against sample test cases."""
     data = RunCodeSchema().load(request.get_json())
     user_id = get_current_user_id()
 
-    result = SubmissionService.run_code(
+    result = SubmissionService.run_code_async(
         user_id=user_id,
         problem_id=data["problem_id"],
         contest_id=data["contest_id"],
@@ -30,10 +42,20 @@ def run_code():
         language=data.get("language", "python"),
     )
 
+    return jsonify(result), 202  # 202 Accepted — job queued
+
+
+@submissions_bp.route("/run/<job_id>", methods=["GET"])
+@jwt_required()
+def get_run_result(job_id):
+    """Poll for a RUN mode result (fallback if SocketIO misses it)."""
+    result = SubmissionService.get_run_result(job_id)
+    if result is None:
+        return jsonify({"status": "pending", "job_id": job_id}), 200
     return jsonify(result), 200
 
 
-# ── SUBMIT Mode ──────────────────────────────────────────────────
+# SUBMIT Mode
 # Execute ALL hidden test cases
 # Save submission to DB
 # Update leaderboard
@@ -41,6 +63,7 @@ def run_code():
 
 @submissions_bp.route("", methods=["POST"])
 @jwt_required()
+@limiter.limit("5/minute")
 def create_submission():
     """Submit code for full judging against all test cases."""
     data = SubmissionCreateSchema().load(request.get_json())
@@ -105,8 +128,7 @@ def problem_submissions(problem_id):
     }), 200
 
 
-# ── Admin: Submission Replay ─────────────────────────────────────
-
+# Admin: Submission Replay
 @submissions_bp.route("/<int:submission_id>/replay", methods=["POST"])
 @jwt_required()
 def replay_submission(submission_id):

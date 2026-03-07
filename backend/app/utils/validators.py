@@ -3,8 +3,7 @@
 from marshmallow import Schema, fields, validate, validates_schema, ValidationError
 
 
-# ── Auth Schemas ──────────────────────────────────────────────────────────────
-
+# Auth Schemas
 class RegisterSchema(Schema):
     username = fields.Str(required=True, validate=validate.Length(min=3, max=80))
     email = fields.Email(required=True)
@@ -16,8 +15,7 @@ class LoginSchema(Schema):
     password = fields.Str(required=True)
 
 
-# ── Contest Schemas ───────────────────────────────────────────────────────────
-
+# Contest Schemas
 class ContestCreateSchema(Schema):
     title = fields.Str(required=True, validate=validate.Length(min=3, max=200))
     description = fields.Str(load_default="")
@@ -39,8 +37,7 @@ class ContestUpdateSchema(Schema):
     is_published = fields.Bool()
 
 
-# ── Problem Schemas ───────────────────────────────────────────────────────────
-
+# Problem Schemas
 class TestCaseSchema(Schema):
     input_data = fields.Str(required=True)
     expected_output = fields.Str(required=True)
@@ -76,8 +73,7 @@ class ProblemUpdateSchema(Schema):
     points = fields.Int(validate=validate.Range(min=1))
 
 
-# ── Submission Schemas ────────────────────────────────────────────────────────
-
+# Submission Schemas
 class SubmissionCreateSchema(Schema):
     problem_id = fields.Int(required=True)
     contest_id = fields.Int(required=True)

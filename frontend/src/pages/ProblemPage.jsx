@@ -27,8 +27,9 @@ export default function ProblemPage() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
 
-    // RUN mode output
+    // RUN mode output (async)
     const [runOutput, setRunOutput] = useState(null);
+    const [runJobId, setRunJobId] = useState(null);
 
     // Proctoring
     const { violations, isFlagged, isFullscreen, enterFullscreen } = useProctoring(
@@ -37,6 +38,7 @@ export default function ProblemPage() {
     );
 
     const pollRef = useRef(null);
+    const runPollRef = useRef(null);
 
     // Join contest room for real-time updates
     useEffect(() => {
@@ -63,6 +65,23 @@ export default function ProblemPage() {
         return cleanup;
     }, [onEvent]);
 
+    // Listen for async RUN results via SocketIO
+    useEffect(() => {
+        const cleanup = onEvent('run_result', (data) => {
+            // Match the job_id to ensure this result is for our current run
+            if (data.job_id && data.job_id === runJobId) {
+                setRunOutput(data);
+                setRunning(false);
+                // Clear the polling fallback
+                if (runPollRef.current) {
+                    clearInterval(runPollRef.current);
+                    runPollRef.current = null;
+                }
+            }
+        });
+        return cleanup;
+    }, [onEvent, runJobId]);
+
     useEffect(() => {
         const fetchData = async () => {
             try {
@@ -80,16 +99,20 @@ export default function ProblemPage() {
             }
         };
         fetchData();
-        return () => { if (pollRef.current) clearInterval(pollRef.current); };
+        return () => {
+            if (pollRef.current) clearInterval(pollRef.current);
+            if (runPollRef.current) clearInterval(runPollRef.current);
+        };
     }, [problemId, isAuthenticated]);
 
-    // Run
+    // Run (async — queued via Redis, results arrive via SocketIO)
     const handleRun = async () => {
         if (!code.trim()) return;
         setRunning(true);
         setError('');
         setActivePanel('output');
         setRunOutput(null);
+        setRunJobId(null);
 
         try {
             const res = await submissionsAPI.run({
@@ -98,10 +121,45 @@ export default function ProblemPage() {
                 code: code,
                 language: 'python',
             });
-            setRunOutput(res.data);
+
+            if (res.data.status === 'queued') {
+                // Async mode: save job_id and wait for SocketIO event
+                const jobId = res.data.job_id;
+                setRunJobId(jobId);
+
+                // Start polling fallback (in case SocketIO event is missed)
+                runPollRef.current = setInterval(async () => {
+                    try {
+                        const pollRes = await submissionsAPI.getRunResult(jobId);
+                        if (pollRes.data && pollRes.data.status !== 'pending') {
+                            setRunOutput(pollRes.data);
+                            setRunning(false);
+                            clearInterval(runPollRef.current);
+                            runPollRef.current = null;
+                        }
+                    } catch { }
+                }, 2000);
+
+                // Safety timeout: stop waiting after 30 seconds
+                setTimeout(() => {
+                    if (runPollRef.current) {
+                        clearInterval(runPollRef.current);
+                        runPollRef.current = null;
+                        setRunning(false);
+                        if (!runOutput) {
+                            setError('Code execution timed out. Please try again.');
+                        }
+                    }
+                }, 30000);
+
+            } else {
+                // Sync fallback (no Redis) — result comes back directly
+                setRunOutput(res.data);
+                setRunning(false);
+            }
         } catch (err) {
-            setError(err.response?.data?.error || 'Run failed');
-        } finally {
+            const msg = err.friendlyMessage || err.response?.data?.error || 'Run failed';
+            setError(msg);
             setRunning(false);
         }
     };
@@ -139,7 +197,8 @@ export default function ProblemPage() {
                 } catch { }
             }, 2000);
         } catch (err) {
-            setError(err.response?.data?.error || 'Submission failed');
+            const msg = err.friendlyMessage || err.response?.data?.error || 'Submission failed';
+            setError(msg);
         } finally {
             setSubmitting(false);
         }
@@ -192,6 +251,9 @@ export default function ProblemPage() {
                             )}
                             {tab === 'output' && runOutput && (
                                 <span className={`ml-2 inline-block h-2 w-2 rounded-full ${runOutput.status === 'passed' ? 'bg-arena-success' : 'bg-arena-danger'}`} />
+                            )}
+                            {tab === 'output' && running && (
+                                <span className="ml-2 inline-block h-2 w-2 rounded-full bg-arena-warning animate-pulse" />
                             )}
                         </button>
                     ))}
@@ -287,7 +349,15 @@ export default function ProblemPage() {
                                 Run Output
                             </h2>
 
-                            {!runOutput ? (
+                            {running ? (
+                                <div className="flex flex-col items-center justify-center py-20 text-center">
+                                    <div className="relative mb-6">
+                                        <div className="h-12 w-12 rounded-full border-4 border-arena-primary/20 border-t-arena-primary animate-spin" />
+                                    </div>
+                                    <p className="text-sm font-medium text-arena-text">Executing your code...</p>
+                                    <p className="text-xs text-arena-text-muted mt-1">Queued for processing. Results will appear automatically.</p>
+                                </div>
+                            ) : !runOutput ? (
                                 <div className="flex flex-col items-center justify-center py-20 text-center">
                                     <svg className="w-12 h-12 text-arena-text-muted/30 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />

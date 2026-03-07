@@ -1,5 +1,17 @@
-"""Submission service — handles RUN (sample only) and SUBMIT (full judge) flows."""
+"""Submission service — handles RUN (async sample) and SUBMIT (full judge) flows.
 
+Scaling changes:
+- RUN mode is now async: instead of executing code synchronously inside
+  the Flask request thread, it pushes a job to the Redis 'run_queue'
+  and returns a job_id immediately. The worker picks it up, executes it,
+  and delivers results via SocketIO ('run_result' event) and a Redis
+  cache key for polling fallback.
+- This means 500 users clicking 'Run' at the same time won't freeze
+  the API — they'll just queue up and the workers process them.
+"""
+
+import json
+import uuid
 from datetime import datetime, timezone
 
 from app.extensions import db
@@ -9,17 +21,18 @@ from app.models.contest import Contest
 from app.models.test_case import TestCase
 from app.models.participant import ContestParticipant
 from app.errors import NotFoundError, ForbiddenError, APIError
+import app.extensions as ext
 
 
 class SubmissionService:
 
-    # ── RUN Mode ─────────────────────────────────────────────────────
-    # Execute only sample test cases
-    # Return detailed output (stdout, stderr, stack trace, execution time)
-    # Do NOT save to DB, do NOT update leaderboard
+    # RUN Mode (Async)
+    # Queue code for execution against sample test cases.
+    # Returns immediately with a job_id.
+    # Results are delivered via SocketIO + cached in Redis for polling.
 
     @staticmethod
-    def run_code(
+    def run_code_async(
         user_id: int,
         problem_id: int,
         contest_id: int,
@@ -27,8 +40,9 @@ class SubmissionService:
         language: str = "python",
     ) -> dict:
         """
-        Run code against sample test cases only (RUN mode).
-        Returns raw output without saving to DB.
+        Queue code for async execution against sample test cases (RUN mode).
+        Returns a job_id. Results arrive via SocketIO 'run_result' event.
+        Falls back to synchronous execution if Redis is unavailable.
         """
         problem = Problem.query.get(problem_id)
         if not problem:
@@ -36,7 +50,7 @@ class SubmissionService:
         if problem.contest_id != contest_id:
             raise APIError("Problem does not belong to this contest", status_code=400)
 
-        # Get only sample test cases
+        # Get sample test cases
         sample_cases = TestCase.query.filter_by(
             problem_id=problem_id, is_sample=True,
         ).order_by(TestCase.order).all()
@@ -60,24 +74,60 @@ class SubmissionService:
                 for tc in sample_cases
             ]
 
-        # Run code directly (sync) — no queue needed for RUN mode
+        job_id = str(uuid.uuid4())
+
+        # Try to queue for async execution via Redis
+        redis_client = ext.redis_client
+        if redis_client:
+            try:
+                job_payload = json.dumps({
+                    "job_id": job_id,
+                    "user_id": user_id,
+                    "contest_id": contest_id,
+                    "problem_id": problem_id,
+                    "code": code,
+                    "language": language,
+                    "time_limit": problem.time_limit,
+                    "test_cases": sample_cases_data,
+                })
+                redis_client.rpush("run_queue", job_payload)
+                return {
+                    "status": "queued",
+                    "job_id": job_id,
+                    "message": "Code queued for execution",
+                }
+            except Exception:
+                pass  # Fall through to sync
+
+        # Sync fallback (dev/no Redis)
+        return SubmissionService._run_code_sync(
+            code, sample_cases_data, problem.time_limit, job_id,
+        )
+
+    @staticmethod
+    def _run_code_sync(
+        code: str,
+        test_cases: list,
+        time_limit: float,
+        job_id: str,
+    ) -> dict:
+        """Synchronous fallback for RUN mode when Redis is unavailable."""
         from worker.executor import CodeExecutor
         executor = CodeExecutor(use_docker=False)
 
         results = []
         overall_status = "passed"
 
-        for i, tc_data in enumerate(sample_cases_data):
+        for i, tc_data in enumerate(test_cases):
             exec_result = executor.execute(
                 code=code,
                 input_data=tc_data["input_data"],
-                timeout=problem.time_limit,
+                timeout=time_limit,
             )
 
             actual = exec_result["stdout"].strip()
             expected = tc_data["expected_output"].strip()
 
-            # Determine test case verdict
             if exec_result["timed_out"]:
                 tc_status = "time_limit_exceeded"
                 overall_status = "time_limit_exceeded"
@@ -97,22 +147,36 @@ class SubmissionService:
                 "expected_output": expected,
                 "actual_output": actual,
                 "stdout": exec_result["stdout"],
-                "stderr": exec_result["stderr"],  # Detailed errors allowed in RUN mode
+                "stderr": exec_result["stderr"],
                 "execution_time": round(exec_result["execution_time"], 4),
             })
 
-            # Stop at first failure (like SUBMIT mode)
             if tc_status != "passed":
                 break
 
         return {
             "status": overall_status,
+            "job_id": job_id,
             "passed": sum(1 for r in results if r["status"] == "passed"),
-            "total": len(sample_cases_data),
+            "total": len(test_cases),
             "results": results,
         }
 
-    # ── SUBMIT Mode ──────────────────────────────────────────────────
+    @staticmethod
+    def get_run_result(job_id: str) -> dict | None:
+        """Poll for a RUN mode result from Redis cache."""
+        redis_client = ext.redis_client
+        if not redis_client:
+            return None
+        try:
+            raw = redis_client.get(f"run_result:{job_id}")
+            if raw:
+                return json.loads(raw)
+        except Exception:
+            pass
+        return None
+
+    # SUBMIT Mode
     # Execute ALL hidden test cases
     # Save submission to DB
     # Update leaderboard
@@ -179,7 +243,6 @@ class SubmissionService:
     @staticmethod
     def _enqueue_judge(submission_id: int) -> None:
         """Push submission to Redis queue, or fall back to sync judging."""
-        import app.extensions as ext
         try:
             if ext.redis_client:
                 ext.redis_client.rpush("judge_queue", str(submission_id))

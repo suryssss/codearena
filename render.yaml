@@ -1,11 +1,65 @@
+# ──────────────────────────────────────────────────────────────────
+# CodeArena — Scalable Deployment Configuration
+#
+# Architecture:
+#   Load Balancer → N API instances (gunicorn + eventlet)
+#                 → Redis (message queue + cache + rate limits)
+#                 → N Judge workers (horizontally scalable)
+#                 → PostgreSQL (connection pooled)
+# ──────────────────────────────────────────────────────────────────
+
 services:
-  # 1. Flask Web Service (API)
+  # ── 1. Flask Web Service (API) ──────────────────────────────────
+  # Gunicorn with eventlet for async WebSocket support.
+  # Scale: Increase -w for more workers per instance, or add more
+  #        instances behind the load balancer.
   - type: web
     name: codearena-api
     runtime: python
     rootDir: backend
+    plan: starter # Upgrade from free for production traffic
     buildCommand: "pip install -r requirements.txt"
-    startCommand: "gunicorn --worker-class eventlet -w 1 run:app"
+    startCommand: "gunicorn --worker-class eventlet -w 4 --timeout 120 --graceful-timeout 30 --max-requests 1000 --max-requests-jitter 50 run:app"
+    # ↑ KEY CHANGES:
+    #   -w 4             → 4 workers (was 1). Each handles concurrent connections.
+    #   --timeout 120    → Kill stuck workers after 2 min (prevents zombie processes).
+    #   --graceful-timeout 30 → Graceful shutdown window for in-flight requests.
+    #   --max-requests 1000   → Restart workers every 1000 requests to prevent memory leaks.
+    #   --max-requests-jitter 50 → Stagger restarts so not all workers restart at once.
+    envVars:
+      - key: FLASK_ENV
+        value: production
+      - key: DATABASE_URL
+        fromDatabase:
+          name: codearena-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: codearena-redis
+          property: connectionString
+      - key: SECRET_KEY
+        generateValue: true
+      - key: JWT_SECRET_KEY
+        generateValue: true
+      - key: DB_POOL_SIZE
+        value: "20"
+      - key: DB_MAX_OVERFLOW
+        value: "40"
+      - key: RATELIMIT_DEFAULT
+        value: "200/minute"
+
+  # ── 2. Background Worker — Primary Judge ────────────────────────
+  # Processes both judge_queue (SUBMIT) and run_queue (RUN).
+  # Scale: Duplicate this service block to spin up more workers.
+  #        All workers safely compete for items on the same Redis queues.
+  - type: worker
+    name: codearena-judge-1
+    runtime: python
+    rootDir: backend
+    plan: starter
+    buildCommand: "pip install -r requirements.txt"
+    startCommand: "python -m worker.judge"
     envVars:
       - key: FLASK_ENV
         value: production
@@ -23,11 +77,14 @@ services:
       - key: JWT_SECRET_KEY
         generateValue: true
 
-  # 2. Background Worker (Judge)
+  # ── 3. Background Worker — Secondary Judge (horizontal scale) ──
+  # Identical to Judge 1. Having multiple workers means submissions
+  # are processed in parallel, reducing wait times during contests.
   - type: worker
-    name: codearena-judge
+    name: codearena-judge-2
     runtime: python
     rootDir: backend
+    plan: starter
     buildCommand: "pip install -r requirements.txt"
     startCommand: "python -m worker.judge"
     envVars:
@@ -42,13 +99,20 @@ services:
           type: redis
           name: codearena-redis
           property: connectionString
+      - key: SECRET_KEY
+        generateValue: true
+      - key: JWT_SECRET_KEY
+        generateValue: true
 
-  # 3. Redis Service
+  # ── 4. Redis Service ───────────────────────────────────────────
+  # Used for: judge queue, run queue, SocketIO message broker,
+  #           leaderboard sorted sets, API caching, rate limiting.
   - type: redis
     name: codearena-redis
-    plan: free
+    plan: starter # Upgrade from free for production
+    maxmemoryPolicy: allkeys-lru # Evict least-recently-used keys when full
     ipAllowList: []
 
 databases:
   - name: codearena-db
-    plan: free
+    plan: starter # Upgrade from free for production

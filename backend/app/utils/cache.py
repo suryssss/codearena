@@ -19,7 +19,7 @@ Cache key naming convention:
 import json
 import app.extensions as ext
 
-# ── Default TTLs (seconds) ───────────────────────────────────────
+# Default TTLs (seconds)
 TTL_SHORT = 30          # 30 seconds — leaderboard, active contest status
 TTL_MEDIUM = 120        # 2 minutes — contest list, problem list
 TTL_LONG = 600          # 10 minutes — user profiles, static content
@@ -112,7 +112,7 @@ def cache_invalidate_user(user_id: int) -> None:
     cache_delete(f"cache:user:{user_id}")
 
 
-# ── Decorator for function-level caching ─────────────────────────
+# Decorator for function-level caching
 
 def cached(key_func, ttl: int = TTL_MEDIUM):
     """

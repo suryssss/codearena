@@ -1,0 +1,10 @@
+{
+  "num_users": 1000,
+  "password": "Test1234!",
+  "contest_id": 1,
+  "problem_ids": [
+    1,
+    2,
+    3
+  ]
+}
